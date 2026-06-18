@@ -1,0 +1,22 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "planemcp"
+version = "0.2.0"
+description = "A Python module."
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "linerun",
+    "dotdb",
+    "mcp",
+    "fastembed"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "ruff"
+]
