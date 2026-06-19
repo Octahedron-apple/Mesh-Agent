@@ -1,7 +1,7 @@
 import asyncio
 import json
-import time
 import threading
+import time
 
 try:
     from openai import OpenAI
@@ -11,6 +11,7 @@ except ImportError:
 hitl_event = threading.Event()
 pending_action = None
 hitl_response = None
+
 
 class AI_Agent:
     """ """
@@ -52,15 +53,12 @@ class AI_Agent:
 
     def _Request_Hitl(self, Tool_Name, Kwargs):
         global pending_action, hitl_event, hitl_response
-        
-        pending_action = {
-            "tool": Tool_Name,
-            "args": Kwargs
-        }
-        
+
+        pending_action = {"tool": Tool_Name, "args": Kwargs}
+
         hitl_event.clear()
         hitl_event.wait()
-        
+
         Response = hitl_response
         pending_action = None
         hitl_response = None
@@ -68,7 +66,7 @@ class AI_Agent:
 
     def _Execute_Tool(self, Tool_Name, **Kwargs):
         self._Auto_Commit(Tool_Name)
-        
+
         if Tool_Name == "Run_Code":
             Code = Kwargs.get("code", "")
             Fname = Kwargs.get("filename", "_run_temp.py")
@@ -98,12 +96,18 @@ class AI_Agent:
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "Name": {"type": "string", "description": "Filename (e.g. script.py)"},
-                            "Content": {"type": "string", "description": "The file contents to write"}
+                            "Name": {
+                                "type": "string",
+                                "description": "Filename (e.g. script.py)",
+                            },
+                            "Content": {
+                                "type": "string",
+                                "description": "The file contents to write",
+                            },
                         },
-                        "required": ["Name", "Content"]
-                    }
-                }
+                        "required": ["Name", "Content"],
+                    },
+                },
             },
             {
                 "type": "function",
@@ -113,11 +117,14 @@ class AI_Agent:
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "Name": {"type": "string", "description": "Filename to read"}
+                            "Name": {
+                                "type": "string",
+                                "description": "Filename to read",
+                            }
                         },
-                        "required": ["Name"]
-                    }
-                }
+                        "required": ["Name"],
+                    },
+                },
             },
             {
                 "type": "function",
@@ -127,12 +134,18 @@ class AI_Agent:
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "code": {"type": "string", "description": "Python code to execute"},
-                            "filename": {"type": "string", "description": "Optional filename to save code as (default: _run_temp.py)"}
+                            "code": {
+                                "type": "string",
+                                "description": "Python code to execute",
+                            },
+                            "filename": {
+                                "type": "string",
+                                "description": "Optional filename to save code as (default: _run_temp.py)",
+                            },
                         },
-                        "required": ["code"]
-                    }
-                }
+                        "required": ["code"],
+                    },
+                },
             },
             {
                 "type": "function",
@@ -142,11 +155,14 @@ class AI_Agent:
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "Name": {"type": "string", "description": "PIP package name (e.g. requests)"}
+                            "Name": {
+                                "type": "string",
+                                "description": "PIP package name (e.g. requests)",
+                            }
                         },
-                        "required": ["Name"]
-                    }
-                }
+                        "required": ["Name"],
+                    },
+                },
             },
             {
                 "type": "function",
@@ -157,44 +173,57 @@ class AI_Agent:
                         "type": "object",
                         "properties": {
                             "Name": {"type": "string"},
-                            "Target_Content": {"type": "string", "description": "The exact text to find"},
-                            "Replacement_Content": {"type": "string", "description": "The text to replace it with"}
+                            "Target_Content": {
+                                "type": "string",
+                                "description": "The exact text to find",
+                            },
+                            "Replacement_Content": {
+                                "type": "string",
+                                "description": "The text to replace it with",
+                            },
                         },
-                        "required": ["Name", "Target_Content", "Replacement_Content"]
-                    }
-                }
-            }
+                        "required": ["Name", "Target_Content", "Replacement_Content"],
+                    },
+                },
+            },
         ]
 
     def _Execution_Loop(self):
         while self.Running:
-            if not self.Api_Key or not self.Model or len([m for m in self.Messages if m["role"] == "user"]) == 0:
+            if (
+                not self.Api_Key
+                or not self.Model
+                or len([m for m in self.Messages if m["role"] == "user"]) == 0
+            ):
                 time.sleep(2)
                 continue
-            
+
             Last = self.Messages[-1]
-            if isinstance(Last, dict) and Last.get("role") == "assistant" and not Last.get("tool_calls"):
+            if (
+                isinstance(Last, dict)
+                and Last.get("role") == "assistant"
+                and not Last.get("tool_calls")
+            ):
                 time.sleep(2)
                 continue
 
             try:
                 Client = OpenAI(
-                    base_url="https://openrouter.ai/api/v1",
-                    api_key=self.Api_Key
+                    base_url="https://openrouter.ai/api/v1", api_key=self.Api_Key
                 )
 
                 Response = Client.chat.completions.create(
                     model=self.Model,
                     messages=self.Messages,
                     tools=self._Get_Tools(),
-                    temperature=0.2
+                    temperature=0.2,
                 )
-                
+
                 Message = Response.choices[0].message
-                
+
                 Msg_Dict = Message.model_dump(exclude_unset=False)
                 self.Messages.append(Msg_Dict)
-                
+
                 if Message.tool_calls:
                     for Tool_Call in Message.tool_calls:
                         Func_Name = Tool_Call.function.name
@@ -202,25 +231,33 @@ class AI_Agent:
                             Args = json.loads(Tool_Call.function.arguments)
                         except json.JSONDecodeError:
                             Args = {}
-                        
+
                         Hitl_Res = self._Request_Hitl(Func_Name, Args)
-                        
+
                         if Hitl_Res and Hitl_Res.get("approved"):
                             Result = self._Execute_Tool(Func_Name, **Args)
-                            self.Messages.append({
-                                "role": "tool",
-                                "tool_call_id": Tool_Call.id,
-                                "name": Func_Name,
-                                "content": Result
-                            })
+                            self.Messages.append(
+                                {
+                                    "role": "tool",
+                                    "tool_call_id": Tool_Call.id,
+                                    "name": Func_Name,
+                                    "content": Result,
+                                }
+                            )
                         else:
-                            Reason = Hitl_Res.get("reason", "Rejected by user") if Hitl_Res else "Rejected"
-                            self.Messages.append({
-                                "role": "tool",
-                                "tool_call_id": Tool_Call.id,
-                                "name": Func_Name,
-                                "content": f"Action rejected by user. Reason: {Reason}"
-                            })
+                            Reason = (
+                                Hitl_Res.get("reason", "Rejected by user")
+                                if Hitl_Res
+                                else "Rejected"
+                            )
+                            self.Messages.append(
+                                {
+                                    "role": "tool",
+                                    "tool_call_id": Tool_Call.id,
+                                    "name": Func_Name,
+                                    "content": f"Action rejected by user. Reason: {Reason}",
+                                }
+                            )
 
             except Exception:
                 time.sleep(5)
