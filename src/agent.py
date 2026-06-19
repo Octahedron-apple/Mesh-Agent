@@ -1,16 +1,6 @@
 import asyncio
 import json
-import threading
-import time
-
-try:
-    from openai import OpenAI
-except ImportError:
-    pass
-
-hitl_event = threading.Event()
-pending_action = None
-hitl_response = None
+from openai import AsyncOpenAI
 
 
 class AI_Agent:
@@ -19,16 +9,21 @@ class AI_Agent:
     def __init__(self, Runner) -> None:
         self.Runner = Runner
         self.Running = False
-        self.Thread = None
+        self.Task = None
         self.Api_Key = ""
         self.Model = ""
         self.System_Prompt = "You Are an AI Agent. You have access to an python Sandbox. Use the tools provided to you to fullfill the request of the user."
         self.Messages = [{"role": "system", "content": self.System_Prompt}]
+        self.Pending_Action = None
+        self.Hitl_Response = None
+        self.Hitl_Event = None
+        self.Client = None
 
     def Set_Config(self, Api_key, Model):
         """ """
         self.Api_Key = Api_key
         self.Model = Model
+        self.Client = AsyncOpenAI(base_url="https://openrouter.ai/api/v1", api_key=self.Api_Key)
 
     def Add_User_Message(self, text):
         """ """
@@ -37,8 +32,7 @@ class AI_Agent:
     def Start(self):
         if not self.Running:
             self.Running = True
-            self.Thread = threading.Thread(target=self._Execution_Loop, daemon=True)
-            self.Thread.start()
+            self.Task = asyncio.create_task(self._Execution_Loop())
 
     def Stop(self):
         self.Running = False
@@ -51,17 +45,15 @@ class AI_Agent:
                 except Exception:
                     pass
 
-    def _Request_Hitl(self, Tool_Name, Kwargs):
-        global pending_action, hitl_event, hitl_response
+    async def _Request_Hitl(self, Tool_Name, Kwargs):
+        self.Pending_Action = {"tool": Tool_Name, "args": Kwargs}
 
-        pending_action = {"tool": Tool_Name, "args": Kwargs}
+        self.Hitl_Event.clear()
+        await self.Hitl_Event.wait()
 
-        hitl_event.clear()
-        hitl_event.wait()
-
-        Response = hitl_response
-        pending_action = None
-        hitl_response = None
+        Response = self.Hitl_Response
+        self.Pending_Action = None
+        self.Hitl_Response = None
         return Response
 
     def _Execute_Tool(self, Tool_Name, **Kwargs):
@@ -188,14 +180,16 @@ class AI_Agent:
             },
         ]
 
-    def _Execution_Loop(self):
+    async def _Execution_Loop(self):
+        self.Hitl_Event = asyncio.Event()
         while self.Running:
             if (
-                not self.Api_Key
+                not self.Client
+                or not self.Api_Key
                 or not self.Model
                 or len([m for m in self.Messages if m["role"] == "user"]) == 0
             ):
-                time.sleep(2)
+                await asyncio.sleep(2)
                 continue
 
             Last = self.Messages[-1]
@@ -204,15 +198,11 @@ class AI_Agent:
                 and Last.get("role") == "assistant"
                 and not Last.get("tool_calls")
             ):
-                time.sleep(2)
+                await asyncio.sleep(2)
                 continue
 
             try:
-                Client = OpenAI(
-                    base_url="https://openrouter.ai/api/v1", api_key=self.Api_Key
-                )
-
-                Response = Client.chat.completions.create(
+                Response = await self.Client.chat.completions.create(
                     model=self.Model,
                     messages=self.Messages,
                     tools=self._Get_Tools(),
@@ -232,10 +222,10 @@ class AI_Agent:
                         except json.JSONDecodeError:
                             Args = {}
 
-                        Hitl_Res = self._Request_Hitl(Func_Name, Args)
+                        Hitl_Res = await self._Request_Hitl(Func_Name, Args)
 
                         if Hitl_Res and Hitl_Res.get("approved"):
-                            Result = self._Execute_Tool(Func_Name, **Args)
+                            Result = await asyncio.to_thread(self._Execute_Tool, Func_Name, **Args)
                             self.Messages.append(
                                 {
                                     "role": "tool",
@@ -259,5 +249,6 @@ class AI_Agent:
                                 }
                             )
 
-            except Exception:
-                time.sleep(5)
+            except Exception as e:
+                print(f"[Agent] Loop Error: {e}")
+                await asyncio.sleep(5)

@@ -1,0 +1,102 @@
+{% extends "index.html" %}
+
+{% block content %}
+<h2>Chat</h2>
+<div id="chat-box" style="border: 1px solid #ccc; height: 400px; padding: 10px; overflow-y: scroll; margin-bottom: 10px; background: #fff;"></div>
+<div style="display: flex; gap: 10px;">
+    <input type="text" id="prompt-input" style="flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 4px;" placeholder="Type a message..." />
+    <button onclick="sendPrompt()" style="padding: 10px 20px; background: #333; color: white; border: none; border-radius: 4px; cursor: pointer;">Send</button>
+</div>
+
+<!-- Human in the loop modal overlay -->
+<div id="hitl-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); justify-content: center; align-items: center; z-index: 1000;">
+    <div style="background: white; padding: 20px; border-radius: 8px; width: 400px; max-width: 90%;">
+        <h3>Action Approval Required</h3>
+        <p>The agent wants to perform the following action:</p>
+        <pre id="hitl-action" style="background: #f4f4f4; padding: 10px; overflow-x: auto; font-size: 0.9em;"></pre>
+        <input type="text" id="hitl-reason" placeholder="Reason (optional)" style="width: 100%; padding: 8px; margin-bottom: 15px; box-sizing: border-box;" />
+        <div style="display: flex; justify-content: flex-end; gap: 10px;">
+            <button onclick="respondHitl(false)" style="padding: 8px 15px; background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer;">Reject</button>
+            <button onclick="respondHitl(true)" style="padding: 8px 15px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer;">Approve</button>
+        </div>
+    </div>
+</div>
+
+<script>
+async function loadMessages() {
+    try {
+        const res = await fetch('/api/messages');
+        const data = await res.json();
+        const chatBox = document.getElementById('chat-box');
+        chatBox.innerHTML = '';
+        if (data.messages) {
+            data.messages.forEach(msg => {
+                const div = document.createElement('div');
+                div.style.marginBottom = '15px';
+                
+                let contentHTML = '';
+                if (typeof msg.content === 'string') {
+                    contentHTML = msg.content.replace(/\n/g, '<br/>');
+                } else {
+                    contentHTML = JSON.stringify(msg.content, null, 2);
+                }
+                
+                div.innerHTML = `<strong style="text-transform: capitalize; color: #555;">${msg.role}:</strong> <div style="margin-top: 5px; background: #f9f9f9; padding: 10px; border-radius: 4px;">${contentHTML}</div>`;
+                chatBox.appendChild(div);
+            });
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+    } catch (e) {
+        console.error("Error loading messages", e);
+    }
+}
+
+async function sendPrompt() {
+    const input = document.getElementById('prompt-input');
+    const text = input.value;
+    if (!text) return;
+    input.value = '';
+    await fetch('/api/prompt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text })
+    });
+    loadMessages();
+}
+
+document.getElementById('prompt-input').addEventListener('keypress', function (e) {
+    if (e.key === 'Enter') sendPrompt();
+});
+
+async function checkHitl() {
+    try {
+        const res = await fetch('/api/hitl/pending');
+        const data = await res.json();
+        const modal = document.getElementById('hitl-modal');
+        if (data.pending) {
+            document.getElementById('hitl-action').textContent = JSON.stringify(data.action, null, 2);
+            modal.style.display = 'flex';
+        } else {
+            modal.style.display = 'none';
+        }
+    } catch (e) {
+        console.error("Error checking HITL", e);
+    }
+}
+
+async function respondHitl(approved) {
+    const reason = document.getElementById('hitl-reason').value;
+    await fetch('/api/hitl/respond', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ approved, reason })
+    });
+    document.getElementById('hitl-modal').style.display = 'none';
+    document.getElementById('hitl-reason').value = '';
+}
+
+setInterval(loadMessages, 3000);
+setInterval(checkHitl, 3000);
+loadMessages();
+</script>
+{% endblock %}

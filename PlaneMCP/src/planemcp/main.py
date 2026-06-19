@@ -12,23 +12,10 @@ class PlaneMCPServer:
         self.model = TextEmbedding(model_name="BAAI/bge-small-en-v1.5")
         
         if memory_dir is None:
-            import inspect
-            try:
-                current_file = os.path.abspath(__file__)
-                caller_dir = None
-                for frame_info in inspect.stack():
-                    frame_file = os.path.abspath(frame_info.filename)
-                    if frame_file != current_file:
-                        caller_dir = os.path.dirname(frame_file)
-                        break
-                
-                if caller_dir is None:
-                    caller_dir = os.getcwd()
-                memory_path = os.path.join(caller_dir, "facts.db")
-            except Exception:
-                memory_path = os.path.join(os.getcwd(), "facts.db")
-        else:
-            memory_path = os.path.join(memory_dir, "facts.db")
+            memory_dir = os.environ.get("PLANE_MCP_DB_DIR", "/app/db")
+        
+        os.makedirs(memory_dir, exist_ok=True)
+        memory_path = os.path.join(memory_dir, "facts.db")
             
         try:
             self.db = DataBase(Dimensions=384, Path=memory_path)
