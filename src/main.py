@@ -4,7 +4,7 @@ from flask import Flask, request, jsonify, render_template, send_file
 import sys
 import shutil
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 
 try:
     from LineRun.linerun.main import Code_Runner
