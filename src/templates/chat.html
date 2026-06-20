@@ -2,7 +2,8 @@
 
 {% block content %}
 <h2>Chat</h2>
-<div id="chat-box" style="border: 1px solid #ccc; height: 400px; padding: 10px; overflow-y: scroll; margin-bottom: 10px; background: #fff;"></div>
+<div id="chat-box" style="border: 1px solid #ccc; height: 400px; padding: 10px; overflow-y: scroll; margin-bottom: 5px; background: #fff;"></div>
+<div id="agent-status" style="height: 20px; color: #74c221; margin-bottom: 5px; font-size: 0.9em;"></div>
 <div style="display: flex; gap: 10px;">
     <input type="text" id="prompt-input" style="flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 4px;" placeholder="Type a message..." />
     <button onclick="sendPrompt()" style="padding: 10px 20px; background: #333; color: white; border: none; border-radius: 4px; cursor: pointer;">Send</button>
@@ -56,12 +57,17 @@ async function sendPrompt() {
     const text = input.value;
     if (!text) return;
     input.value = '';
-    await fetch('/api/prompt', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text })
-    });
-    loadMessages();
+    document.getElementById('agent-status').innerHTML = 'Agent is thinking...';
+    try {
+        await fetch('/api/prompt', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text })
+        });
+        loadMessages();
+    } catch (e) {
+        document.getElementById('agent-status').innerHTML = `<span style="color: red;">Error: ${e.message || e}</span>`;
+    }
 }
 
 document.getElementById('prompt-input').addEventListener('keypress', function (e) {
@@ -95,8 +101,29 @@ async function respondHitl(approved) {
     document.getElementById('hitl-reason').value = '';
 }
 
+async function updateStatus() {
+    try {
+        const res = await fetch('/api/status');
+        const data = await res.json();
+        const statusDiv = document.getElementById('agent-status');
+        if (!data.configured) {
+            statusDiv.innerHTML = '<span style="color: #aaa;">Not configured — go to <a href="/config">Config</a></span>';
+        } else if (data.pending_hitl) {
+            statusDiv.innerHTML = '<span style="color: #e67e22;">Waiting for your approval...</span>';
+        } else if (data.thinking) {
+            statusDiv.innerHTML = '<span style="color: #74c221;">Agent is thinking...</span>';
+        } else {
+            statusDiv.innerHTML = '<span style="color: #aaa;">Agent idle</span>';
+        }
+    } catch (e) {
+        console.error("Error checking status", e);
+    }
+}
+
 setInterval(loadMessages, 3000);
-setInterval(checkHitl, 3000);
+setInterval(checkHitl, 2000);
+setInterval(updateStatus, 1000);
 loadMessages();
+updateStatus();
 </script>
 {% endblock %}

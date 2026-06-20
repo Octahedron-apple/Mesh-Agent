@@ -9,7 +9,9 @@ class AI_Agent:
     def __init__(self, Runner) -> None:
         self.Runner = Runner
         self.Running = False
+        self.Is_Thinking = False
         self.Task = None
+        self.Loop = None
         self.Api_Key = ""
         self.Model = ""
         self.System_Prompt = "You Are an AI Agent. You have access to an python Sandbox. Use the tools provided to you to fullfill the request of the user."
@@ -29,10 +31,12 @@ class AI_Agent:
         """ """
         self.Messages.append({"role": "user", "content": text})
 
-    def Start(self):
+    def Start(self, loop):
+        """Must be called from within a running event loop or passed the loop explicitly."""
         if not self.Running:
             self.Running = True
-            self.Task = asyncio.create_task(self._Execution_Loop())
+            self.Loop = loop
+            self.Task = loop.create_task(self._Execution_Loop())
 
     def Stop(self):
         self.Running = False
@@ -181,7 +185,7 @@ class AI_Agent:
         ]
 
     async def _Execution_Loop(self):
-        self.Hitl_Event = asyncio.Event()
+        self.Hitl_Event = asyncio.Event()  # created inside the loop thread — correct
         while self.Running:
             if (
                 not self.Client
@@ -202,16 +206,20 @@ class AI_Agent:
                 continue
 
             try:
+                self.Is_Thinking = True
                 Response = await self.Client.chat.completions.create(
                     model=self.Model,
                     messages=self.Messages,
                     tools=self._Get_Tools(),
                     temperature=0.2,
                 )
+                self.Is_Thinking = False
 
                 Message = Response.choices[0].message
 
-                Msg_Dict = Message.model_dump(exclude_unset=False)
+                Msg_Dict = Message.model_dump(exclude_unset=True, exclude_none=True)
+                if "content" not in Msg_Dict:
+                    Msg_Dict["content"] = ""
                 self.Messages.append(Msg_Dict)
 
                 if Message.tool_calls:
@@ -250,5 +258,6 @@ class AI_Agent:
                             )
 
             except Exception as e:
+                self.Is_Thinking = False
                 print(f"[Agent] Loop Error: {e}")
                 await asyncio.sleep(5)

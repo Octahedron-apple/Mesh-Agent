@@ -4,7 +4,7 @@ from flask import Flask, request, jsonify, render_template, send_file
 import sys
 import shutil
 
-
+sys.path.insert(0, '/app')
 
 try:
     from LineRun.linerun.main import Code_Runner
@@ -23,7 +23,7 @@ except ImportError:
         def Reset(self, h):
             return f"Mock reset to {h}"
 
-from src.agent import AI_Agent
+from agent import AI_Agent
 
 app = Flask(__name__)
 
@@ -40,13 +40,13 @@ agent = AI_Agent(Runner=runner)
 import asyncio
 try:
     loop = asyncio.get_running_loop()
-    agent.Start()
+    agent.Start(loop)
 except RuntimeError:
     import threading
     def start_agent_loop():
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        agent.Start()
+        agent.Start(loop)
         loop.run_forever()
     threading.Thread(target=start_agent_loop, daemon=True).start()
 
@@ -113,6 +113,15 @@ def install():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/status', methods=['GET'])
+def agent_status():
+    return jsonify({
+        "running": agent.Running,
+        "thinking": agent.Is_Thinking,
+        "configured": bool(agent.Api_Key and agent.Model),
+        "pending_hitl": agent.Pending_Action is not None,
+    })
+
 @app.route('/api/state', methods=['GET'])
 def state():
     try:
@@ -175,10 +184,10 @@ def hitl_respond():
         "approved": approved,
         "reason": reason
     }
-    
-    if agent.Task and agent.Hitl_Event:
-        agent.Task.get_loop().call_soon_threadsafe(agent.Hitl_Event.set)
-    
+
+    if agent.Loop and agent.Hitl_Event:
+        agent.Loop.call_soon_threadsafe(agent.Hitl_Event.set)
+
     return jsonify({"status": "ok"})
 
 if __name__ == '__main__':
