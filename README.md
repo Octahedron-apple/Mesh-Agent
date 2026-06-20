@@ -21,27 +21,31 @@ Mesh-Agent is a containerized, asynchronous AI Agent equipped with a Flask-based
 
 ### Installation & Execution
 
+#### Option 1: Run with Pre-built Docker Image (Recommended)
+You can run the agent directly without cloning the repository:
+```bash
+docker pull ghcr.io/octahedron-apple/mesh-agent:main
+docker run -p 5000:5000 ghcr.io/octahedron-apple/mesh-agent:main
+```
+
+#### Option 2: Build from Source
+If you want to modify the code or build it locally:
+
 1. **Clone the repository**:
    ```bash
    git clone https://github.com/Octahedron-apple/Mesh-Agent.git
    cd Mesh-Agent
    ```
 
-2. **Run with Pre-built Docker Image (Recommended)**:
-   ```bash
-   docker pull ghcr.io/octahedron-apple/mesh-agent:main
-   docker run -p 5000:5000 ghcr.io/octahedron-apple/mesh-agent:main
-   ```
-
-3. **Or Build from Source**:
+2. **Build and Run**:
    ```bash
    docker build -t mesh-agent -f main.dockerfile .
    docker run -p 5000:5000 mesh-agent
    ```
    *(Or use docker-compose if configured)*
 
-3. **Access the Web Interface**:
-   Open your browser and navigate to `http://localhost:5000/`.
+### Access the Web Interface
+Once the container is running, open your browser and navigate to `http://localhost:5000/`.
 
 ## Architecture Overview
 
