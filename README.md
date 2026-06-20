@@ -27,7 +27,13 @@ Mesh-Agent is a containerized, asynchronous AI Agent equipped with a Flask-based
    cd Mesh-Agent
    ```
 
-2. **Build and Run with Docker**:
+2. **Run with Pre-built Docker Image (Recommended)**:
+   ```bash
+   docker pull ghcr.io/octahedron-apple/mesh-agent:main
+   docker run -p 5000:5000 ghcr.io/octahedron-apple/mesh-agent:main
+   ```
+
+3. **Or Build from Source**:
    ```bash
    docker build -t mesh-agent -f main.dockerfile .
    docker run -p 5000:5000 mesh-agent
