@@ -36,13 +36,38 @@ async function loadMessages() {
                 div.style.marginBottom = '15px';
                 
                 let contentHTML = '';
-                if (typeof msg.content === 'string') {
-                    contentHTML = msg.content.replace(/\n/g, '<br/>');
-                } else {
-                    contentHTML = JSON.stringify(msg.content, null, 2);
+                if (msg.content) {
+                    if (typeof msg.content === 'string') {
+                        contentHTML = msg.content.replace(/\n/g, '<br/>');
+                    } else {
+                        contentHTML = JSON.stringify(msg.content, null, 2);
+                    }
                 }
                 
-                div.innerHTML = `<strong style="text-transform: capitalize; color: #555;">${msg.role}:</strong> <div style="margin-top: 5px; background: #f9f9f9; padding: 10px; border-radius: 4px;">${contentHTML}</div>`;
+                if (msg.tool_calls && msg.tool_calls.length > 0) {
+                    let toolsHTML = msg.tool_calls.map(tc => {
+                        let args = tc.function.arguments;
+                        try {
+                            args = JSON.stringify(JSON.parse(args), null, 2);
+                        } catch (e) {}
+                        return `<div style="margin-top: 10px; padding: 10px; background: #e9ecef; border-left: 4px solid #007bff; border-radius: 4px;">
+                            <strong>Tool Call:</strong> <code>${tc.function.name}</code>
+                            <pre style="margin-top: 5px; margin-bottom: 0; font-size: 0.9em; white-space: pre-wrap;">${args}</pre>
+                        </div>`;
+                    }).join('');
+                    contentHTML += toolsHTML;
+                }
+                
+                let headerText = msg.role;
+                if (msg.role === 'tool' && msg.name) {
+                    headerText = `Tool Result (${msg.name})`;
+                }
+                
+                if (!contentHTML && msg.role === 'assistant') {
+                    contentHTML = '<em style="color: #999;">Using tools...</em>';
+                }
+                
+                div.innerHTML = `<strong style="text-transform: capitalize; color: #555;">${headerText}:</strong> <div style="margin-top: 5px; background: #f9f9f9; padding: 10px; border-radius: 4px;">${contentHTML}</div>`;
                 chatBox.appendChild(div);
             });
             chatBox.scrollTop = chatBox.scrollHeight;

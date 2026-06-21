@@ -76,7 +76,10 @@ class AI_Agent:
         if hasattr(self.Runner, Tool_Name):
             Func = getattr(self.Runner, Tool_Name)
             try:
-                return str(Func(**Kwargs))
+                res = Func(**Kwargs)
+                if res is None:
+                    return f"Action {Tool_Name} completed successfully."
+                return str(res)
             except Exception as e:
                 return f"Error executing {Tool_Name}: {e}"
         else:
