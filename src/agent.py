@@ -1,5 +1,6 @@
 import asyncio
 import json
+
 from openai import AsyncOpenAI
 
 
@@ -25,7 +26,9 @@ class AI_Agent:
         """ """
         self.Api_Key = Api_key
         self.Model = Model
-        self.Client = AsyncOpenAI(base_url="https://openrouter.ai/api/v1", api_key=self.Api_Key)
+        self.Client = AsyncOpenAI(
+            base_url="https://openrouter.ai/api/v1", api_key=self.Api_Key
+        )
 
     def Add_User_Message(self, text):
         """ """
@@ -236,7 +239,9 @@ class AI_Agent:
                         Hitl_Res = await self._Request_Hitl(Func_Name, Args)
 
                         if Hitl_Res and Hitl_Res.get("approved"):
-                            Result = await asyncio.to_thread(self._Execute_Tool, Func_Name, **Args)
+                            Result = await asyncio.to_thread(
+                                self._Execute_Tool, Func_Name, **Args
+                            )
                             self.Messages.append(
                                 {
                                     "role": "tool",

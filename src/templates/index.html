@@ -1,47 +1,132 @@
 <!doctype html>
 <html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>AI Agent</title>
+        <style>
+            :root {
+                --bg-color: #fff;
+                --text-color: #000;
+                --sidebar-bg: #74c221;
+                --sidebar-text: #333;
+                --border-color: #ddd;
 
-<head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>AI Agent</title>
-    <style>
-        body {
-            margin: 0;
-        }
+                --chat-bg: #fff;
+                --chat-border: #ccc;
+                --msg-bg: #f9f9f9;
+                --msg-text: #555;
+                --input-bg: #fff;
+                --input-border: #ccc;
+                --input-text: #000;
+                --btn-bg: #333;
+                --btn-text: #fff;
+                --tool-bg: #e9ecef;
+                --modal-bg: white;
+                --modal-overlay: rgba(0, 0, 0, 0.5);
+                --modal-pre-bg: #f4f4f4;
+                --code-bg: #eee;
+            }
 
-        .Sidebar {
-            display: flex;
-            flex-direction: column;
-            width: 200px;
-            height: 100vh;
-            background-color: #74c221;
-            padding: 20px;
-            box-sizing: border-box;
-            border-right: 1px solid #ddd;
-            position: fixed;
-            left: 0;
-            top: 0;
-            gap: 15px;
-            font-family: sans-serif;
-        }
+            body.dark {
+                --bg-color: #1e1e1e;
+                --text-color: #e0e0e0;
+                --sidebar-bg: #2d2d2d;
+                --sidebar-text: #e0e0e0;
+                --border-color: #444;
 
-        .Sidebar a {
-            text-decoration: none;
-            color: #333;
-        }
-    </style>
-</head>
+                --chat-bg: #2d2d2d;
+                --chat-border: #444;
+                --msg-bg: #383838;
+                --msg-text: #ccc;
+                --input-bg: #383838;
+                --input-border: #555;
+                --input-text: #e0e0e0;
+                --btn-bg: #555;
+                --btn-text: #fff;
+                --tool-bg: #444;
+                --modal-bg: #2d2d2d;
+                --modal-overlay: rgba(0, 0, 0, 0.7);
+                --modal-pre-bg: #1e1e1e;
+                --code-bg: #333;
+            }
 
-    <div class="Sidebar">
-        <a href="/">Chat</a>
-        <a href="/terminal">Terminal</a>
-        <a href="/config">Credentials</a>
-        <a href="/workspace">Files</a>
-    </div>
-    <div style="margin-left: 200px; padding: 20px; font-family: sans-serif; box-sizing: border-box; height: 100vh; overflow-y: auto;">
-        {% block content %}{% endblock %}
-    </div>
-</body>
+            body {
+                margin: 0;
+                background-color: var(--bg-color);
+                color: var(--text-color);
+            }
 
+            .Sidebar {
+                display: flex;
+                flex-direction: column;
+                width: 200px;
+                height: 100vh;
+                background-color: var(--sidebar-bg);
+                padding: 20px;
+                box-sizing: border-box;
+                border-right: 1px solid var(--border-color);
+                position: fixed;
+                left: 0;
+                top: 0;
+                gap: 15px;
+                font-family: sans-serif;
+            }
+
+            .Sidebar a {
+                text-decoration: none;
+                color: var(--sidebar-text);
+            }
+
+            .theme-toggle {
+                margin-top: auto;
+                cursor: pointer;
+                padding: 10px;
+                background: var(--btn-bg);
+                color: var(--btn-text);
+                border: none;
+                border-radius: 4px;
+                text-align: center;
+            }
+        </style>
+    </head>
+
+    <body class="{% if dark_mode %}dark{% endif %}">
+        <div class="Sidebar">
+            <a href="/">Chat</a>
+            <a href="/terminal">Terminal</a>
+            <a href="/config">Credentials</a>
+            <a href="/workspace">Files</a>
+
+            <button class="theme-toggle" onclick="toggleTheme()">
+                Toggle Theme
+            </button>
+        </div>
+        <div
+            style="
+                margin-left: 200px;
+                padding: 20px;
+                font-family: sans-serif;
+                box-sizing: border-box;
+                height: 100vh;
+                overflow-y: auto;
+            "
+        >
+            {% block content %}{% endblock %}
+        </div>
+
+        <script>
+            function toggleTheme() {
+                const body = document.body;
+                body.classList.toggle("dark");
+                const isDark = body.classList.contains("dark");
+
+                fetch("/api/theme", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ dark: isDark }),
+                }).catch((e) => console.error("Error saving theme", e));
+            }
+        </script>
+    </body>
 </html>

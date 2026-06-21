@@ -1,44 +1,82 @@
-{% extends "index.html" %}
-
-{% block content %}
+{% extends "index.html" %} {% block content %}
 <h2>Terminal</h2>
-<div id="terminal-output" style="background: #1e1e1e; color: #0f0; font-family: monospace; height: 400px; padding: 15px; overflow-y: scroll; margin-bottom: 10px; white-space: pre-wrap; border-radius: 4px;"></div>
-<div style="display: flex; gap: 10px;">
-    <input type="text" id="cmd-input" style="flex: 1; padding: 10px; font-family: monospace; border: 1px solid #ccc; border-radius: 4px;" placeholder="Enter command to run in the workspace..." />
-    <button onclick="runCommand()" style="padding: 10px 20px; background: #333; color: white; border: none; border-radius: 4px; cursor: pointer;">Execute</button>
+<div
+    id="terminal-output"
+    style="
+        background: #1e1e1e;
+        color: #0f0;
+        font-family: monospace;
+        height: 400px;
+        padding: 15px;
+        overflow-y: scroll;
+        margin-bottom: 10px;
+        white-space: pre-wrap;
+        border-radius: 4px;
+    "
+></div>
+<div style="display: flex; gap: 10px">
+    <input
+        type="text"
+        id="cmd-input"
+        style="
+            flex: 1;
+            padding: 10px;
+            font-family: monospace;
+            border: 1px solid var(--input-border);
+            border-radius: 4px;
+            background: var(--input-bg);
+            color: var(--input-text);
+        "
+        placeholder="Enter command to run in the workspace..."
+    />
+    <button
+        onclick="runCommand()"
+        style="
+            padding: 10px 20px;
+            background: var(--btn-bg);
+            color: var(--btn-text);
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        "
+    >
+        Execute
+    </button>
 </div>
 
 <script>
-async function runCommand() {
-    const input = document.getElementById('cmd-input');
-    const cmd = input.value;
-    if (!cmd) return;
-    
-    const outputBox = document.getElementById('terminal-output');
-    outputBox.innerHTML += `<span style="color: #fff;">$ ${cmd}</span>\n`;
-    input.value = '';
-    
-    try {
-        const res = await fetch('/api/terminal', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ command: cmd })
-        });
-        const data = await res.json();
-        if (data.output) {
-            outputBox.innerHTML += data.output;
-        } else if (data.error) {
-            outputBox.innerHTML += `<span style="color: red;">${data.error}</span>\n`;
-        }
-    } catch (e) {
-        outputBox.innerHTML += `<span style="color: red;">Network Error: ${e}</span>\n`;
-    }
-    
-    outputBox.scrollTop = outputBox.scrollHeight;
-}
+    async function runCommand() {
+        const input = document.getElementById("cmd-input");
+        const cmd = input.value;
+        if (!cmd) return;
 
-document.getElementById('cmd-input').addEventListener('keypress', function (e) {
-    if (e.key === 'Enter') runCommand();
-});
+        const outputBox = document.getElementById("terminal-output");
+        outputBox.innerHTML += `<span style="color: #fff;">$ ${cmd}</span>\n`;
+        input.value = "";
+
+        try {
+            const res = await fetch("/api/terminal", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ command: cmd }),
+            });
+            const data = await res.json();
+            if (data.output) {
+                outputBox.innerHTML += data.output;
+            } else if (data.error) {
+                outputBox.innerHTML += `<span style="color: red;">${data.error}</span>\n`;
+            }
+        } catch (e) {
+            outputBox.innerHTML += `<span style="color: red;">Network Error: ${e}</span>\n`;
+        }
+
+        outputBox.scrollTop = outputBox.scrollHeight;
+    }
+
+    document
+        .getElementById("cmd-input")
+        .addEventListener("keypress", function (e) {
+            if (e.key === "Enter") runCommand();
+        });
 </script>
 {% endblock %}

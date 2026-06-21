@@ -1,44 +1,63 @@
-{% extends "index.html" %}
-
-{% block content %}
+{% extends "index.html" %} {% block content %}
 <h2>Workspace Files</h2>
-<div style="margin-bottom: 20px;">
-    <button onclick="window.location.href='/api/download'" style="padding: 12px 20px; background: #74c221; border: none; border-radius: 4px; color: white; font-weight: bold; cursor: pointer;">
+<div style="margin-bottom: 20px">
+    <button
+        onclick="window.location.href = '/api/download'"
+        style="
+            padding: 12px 20px;
+            background: #74c221;
+            border: none;
+            border-radius: 4px;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+        "
+    >
         📥 Download Entire Workspace (.zip)
     </button>
 </div>
 
-<div style="background: #f9f9f9; border: 1px solid #ddd; border-radius: 8px; padding: 20px; max-width: 600px;">
-    <h3 style="margin-top: 0;">Files currently in /app/agent_workspace:</h3>
-    <ul id="file-list" style="list-style: none; padding: 0; margin: 0;">
+<div
+    style="
+        background: var(--msg-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        padding: 20px;
+        max-width: 600px;
+    "
+>
+    <h3 style="margin-top: 0">Files currently in /app/agent_workspace:</h3>
+    <ul id="file-list" style="list-style: none; padding: 0; margin: 0">
         <li>Loading files...</li>
     </ul>
 </div>
 
 <script>
-async function loadFiles() {
-    try {
-        const res = await fetch('/api/files');
-        const data = await res.json();
-        const list = document.getElementById('file-list');
-        list.innerHTML = '';
-        
-        if (data.files && data.files.length > 0) {
-            data.files.forEach(file => {
-                const li = document.createElement('li');
-                li.style.padding = '8px 0';
-                li.style.borderBottom = '1px solid #eee';
-                li.innerHTML = `📄 <strong>${file}</strong> <a href="/api/download/${file}" style="float: right; font-size: 0.9em; color: #0066cc; text-decoration: none;">Download File</a>`;
-                list.appendChild(li);
-            });
-        } else {
-            list.innerHTML = '<li style="color: #666;">No files found in workspace.</li>';
+    async function loadFiles() {
+        try {
+            const res = await fetch("/api/files");
+            const data = await res.json();
+            const list = document.getElementById("file-list");
+            list.innerHTML = "";
+
+            if (data.files && data.files.length > 0) {
+                data.files.forEach((file) => {
+                    const li = document.createElement("li");
+                    li.style.padding = "8px 0";
+                    li.style.borderBottom = "1px solid var(--border-color)";
+                    li.innerHTML = `📄 <strong>${file}</strong> <a href="/api/download/${file}" style="float: right; font-size: 0.9em; color: #0066cc; text-decoration: none;">Download File</a>`;
+                    list.appendChild(li);
+                });
+            } else {
+                list.innerHTML =
+                    '<li style="color: var(--msg-text);">No files found in workspace.</li>';
+            }
+        } catch (e) {
+            console.error("Error loading files", e);
+            document.getElementById("file-list").innerHTML =
+                `<li style="color: red;">Error loading files: ${e}</li>`;
         }
-    } catch (e) {
-        console.error("Error loading files", e);
-        document.getElementById('file-list').innerHTML = `<li style="color: red;">Error loading files: ${e}</li>`;
     }
-}
-loadFiles();
+    loadFiles();
 </script>
 {% endblock %}
