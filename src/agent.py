@@ -22,10 +22,14 @@ class AI_Agent:
         self.Hitl_Event = None
         self.Client = None
 
-    def Set_Config(self, Api_key, Model):
+    def Set_Config(self, Api_key, Model, System_Prompt=None):
         """ """
         self.Api_Key = Api_key
         self.Model = Model
+        if System_Prompt:
+            self.System_Prompt = System_Prompt
+            if len(self.Messages) > 0 and self.Messages[0]["role"] == "system":
+                self.Messages[0]["content"] = self.System_Prompt
         self.Client = AsyncOpenAI(
             base_url="https://openrouter.ai/api/v1", api_key=self.Api_Key
         )

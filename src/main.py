@@ -106,13 +106,20 @@ def workspace_page():
     return render_template("workspace.html")
 
 
-@app.route("/api/config", methods=["POST"])
+@app.route("/api/config", methods=["GET", "POST"])
 def config():
+    if request.method == "GET":
+        return jsonify({
+            "api_key": agent.Api_Key,
+            "model": agent.Model,
+            "system_prompt": agent.System_Prompt
+        })
     data = request.json
     api_key = data.get("api_key")
     model = data.get("model")
+    system_prompt = data.get("system_prompt")
     if api_key and model:
-        agent.Set_Config(api_key, model)
+        agent.Set_Config(api_key, model, system_prompt)
         return jsonify({"status": "ok"})
     return jsonify({"error": "Missing key or model"}), 400
 

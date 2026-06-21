@@ -4,7 +4,8 @@
     id="terminal-output"
     style="
         background: #1e1e1e;
-        color: #0f0;
+        color: #39ff14;
+        text-shadow: 0 0 5px #39ff14, 0 0 10px #39ff14;
         font-family: monospace;
         flex: 1;
         min-height: 0;
@@ -52,7 +53,7 @@
         if (!cmd) return;
 
         const outputBox = document.getElementById("terminal-output");
-        outputBox.innerHTML += `<span style="color: #fff;">$ ${cmd}</span>\n`;
+        outputBox.innerHTML += `<span>$ ${cmd}</span>\n`;
         input.value = "";
 
         try {

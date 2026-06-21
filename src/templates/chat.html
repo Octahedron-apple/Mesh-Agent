@@ -135,6 +135,8 @@
             chatBox.innerHTML = "";
             if (data.messages) {
                 data.messages.forEach((msg) => {
+                    if (msg.role === 'system') return;
+                    
                     const div = document.createElement("div");
                     div.style.marginBottom = "15px";
 

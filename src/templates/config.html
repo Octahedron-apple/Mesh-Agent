@@ -52,6 +52,26 @@
         />
     </div>
 
+    <div>
+        <label style="display: block; font-weight: bold; margin-bottom: 5px"
+            >System Prompt:</label
+        >
+        <textarea
+            id="system-prompt"
+            style="
+                width: 100%;
+                padding: 10px;
+                border: 1px solid var(--input-border);
+                border-radius: 4px;
+                box-sizing: border-box;
+                background: var(--input-bg);
+                color: var(--input-text);
+                height: 100px;
+                resize: vertical;
+            "
+        ></textarea>
+    </div>
+
     <button
         onclick="saveConfig()"
         style="
@@ -71,9 +91,23 @@
 </div>
 
 <script>
+    async function loadConfig() {
+        try {
+            const res = await fetch("/api/config");
+            const data = await res.json();
+            if (data.api_key) document.getElementById("api-key").value = data.api_key;
+            if (data.model) document.getElementById("model-name").value = data.model;
+            if (data.system_prompt) document.getElementById("system-prompt").value = data.system_prompt;
+        } catch (e) {
+            console.error("Error loading config", e);
+        }
+    }
+    loadConfig();
+
     async function saveConfig() {
         const api_key = document.getElementById("api-key").value;
         const model = document.getElementById("model-name").value;
+        const system_prompt = document.getElementById("system-prompt").value;
         const status = document.getElementById("status-msg");
 
         status.innerHTML = "Saving...";
@@ -82,7 +116,7 @@
             const res = await fetch("/api/config", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ api_key, model }),
+                body: JSON.stringify({ api_key, model, system_prompt }),
             });
             const data = await res.json();
 
