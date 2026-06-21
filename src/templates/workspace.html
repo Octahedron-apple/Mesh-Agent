@@ -26,7 +26,7 @@
         max-width: 600px;
     "
 >
-    <h3 style="margin-top: 0">Files currently in /app/agent_workspace:</h3>
+    <h3 style="margin-top: 0">Files currently in workspace:</h3>
     <ul id="file-list" style="list-style: none; padding: 0; margin: 0">
         <li>Loading files...</li>
     </ul>
@@ -50,7 +50,7 @@
                 });
             } else {
                 list.innerHTML =
-                    '<li style="color: var(--msg-text);">No files found in workspace.</li>';
+                    '<li style="color: var(--msg-text);">No files created in workspace.</li>';
             }
         } catch (e) {
             console.error("Error loading files", e);
