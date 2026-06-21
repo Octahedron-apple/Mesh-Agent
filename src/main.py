@@ -232,6 +232,14 @@ def download_workspace():
         zip_path + ".zip", as_attachment=True, download_name="workspace.zip"
     )
 
+@app.route("/api/download/<path:filename>", methods=["GET"])
+def download_file(filename):
+    from flask import send_from_directory
+    try:
+        return send_from_directory(WORKSPACE_DIR, filename, as_attachment=True)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 404
+
 
 @app.route("/api/hitl/pending", methods=["GET"])
 def hitl_pending():
