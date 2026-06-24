@@ -195,7 +195,7 @@ class AI_Agent:
         ]
 
     async def _Execution_Loop(self):
-        self.Hitl_Event = asyncio.Event()  # created inside the loop thread — correct
+        self.Hitl_Event = asyncio.Event() 
         while self.Running:
             if (
                 not self.Client
