@@ -4,6 +4,12 @@ import shutil
 import subprocess
 import sys
 import threading
+import pty
+import select
+import fcntl
+import termios
+import struct
+import time
 
 from flask import Flask, jsonify, render_template, request, send_file
 from flask_socketio import SocketIO, emit
@@ -51,6 +57,74 @@ os.makedirs(WORKSPACE_DIR, exist_ok=True)
 
 runner = Code_Runner(Path=WORKSPACE_DIR, Venv_Path=AGENT_VENV)
 agent = AI_Agent(Runner=runner)
+
+# ---------------------------------------------------------------------------
+# PTY Terminal manager
+# ---------------------------------------------------------------------------
+terminal_fd = None
+terminal_child = None
+
+def set_pty_size(fd, rows, cols):
+    size = struct.pack("HHHH", rows, cols, 0, 0)
+    fcntl.ioctl(fd, termios.TIOCSWINSZ, size)
+
+def start_persistent_terminal():
+    global terminal_fd, terminal_child
+    if terminal_child is not None and terminal_child.poll() is None:
+        return
+        
+    master_fd, slave_fd = pty.openpty()
+    
+    env = os.environ.copy()
+    env["TERM"] = "xterm-256color"
+    
+    terminal_child = subprocess.Popen(
+        ["bash"],
+        preexec_fn=os.setsid,
+        stdin=slave_fd,
+        stdout=slave_fd,
+        stderr=slave_fd,
+        cwd=WORKSPACE_DIR,
+        env=env
+    )
+    
+    os.close(slave_fd)
+    terminal_fd = master_fd
+    
+    # Default window size
+    try:
+        set_pty_size(terminal_fd, 24, 80)
+    except Exception:
+        pass
+        
+    threading.Thread(target=read_terminal_output, daemon=True).start()
+
+def read_terminal_output():
+    global terminal_fd, terminal_child
+    while True:
+        if terminal_fd is None:
+            time.sleep(0.1)
+            continue
+        try:
+            r, w, x = select.select([terminal_fd], [], [], 1.0)
+            if terminal_fd in r:
+                data = os.read(terminal_fd, 1024)
+                if not data:
+                    break
+                socketio.emit("terminal_output", {"output": data.decode("utf-8", errors="ignore")})
+        except (IOError, OSError):
+            break
+        except Exception as e:
+            print(f"[Terminal] Error: {e}")
+            break
+            
+    print("[Terminal] Shell exited. Restarting in 1s...")
+    terminal_fd = None
+    terminal_child = None
+    time.sleep(1)
+    start_persistent_terminal()
+
+start_persistent_terminal()
 
 
 # ---------------------------------------------------------------------------
@@ -125,6 +199,40 @@ def on_request_state():
     emit("status_update", _build_status_payload())
     emit("messages_update", _build_messages_payload())
     emit("hitl_pending", _build_hitl_payload())
+
+
+@socketio.on("terminal_input")
+def on_terminal_input(data):
+    global terminal_fd
+    input_str = data.get("input", "")
+    if terminal_fd is not None and input_str:
+        try:
+            os.write(terminal_fd, input_str.encode("utf-8"))
+        except Exception as e:
+            print(f"[Terminal] Input error: {e}")
+
+
+@socketio.on("terminal_connect")
+def on_terminal_connect():
+    global terminal_fd
+    if terminal_fd is not None:
+        try:
+            # Send Ctrl-L to clear and redraw prompt
+            os.write(terminal_fd, b"\x0c")
+        except Exception:
+            pass
+
+
+@socketio.on("terminal_resize")
+def on_terminal_resize(data):
+    global terminal_fd
+    rows = data.get("rows")
+    cols = data.get("cols")
+    if terminal_fd is not None and rows and cols:
+        try:
+            set_pty_size(terminal_fd, rows, cols)
+        except Exception as e:
+            print(f"[Terminal] Resize error: {e}")
 
 
 # ---------------------------------------------------------------------------

@@ -1,84 +1,93 @@
 {% extends "index.html" %} {% block content %}
 <h2>Terminal</h2>
-<div
-    id="terminal-output"
-    style="
-        background: #1e1e1e;
-        color: #39ff14;
-        text-shadow: 0 0 5px #39ff14, 0 0 10px #39ff14;
-        font-family: monospace;
-        flex: 1;
-        min-height: 0;
-        padding: 15px;
-        overflow-y: scroll;
-        margin-bottom: 10px;
-        white-space: pre-wrap;
-        border-radius: 4px;
-    "
-></div>
-<div style="display: flex; gap: 10px">
-    <input
-        type="text"
-        id="cmd-input"
-        style="
-            flex: 1;
-            padding: 10px;
-            font-family: monospace;
-            border: 1px solid var(--input-border);
-            border-radius: 4px;
-            background: var(--input-bg);
-            color: var(--input-text);
-        "
-        placeholder="Enter command to run in the workspace..."
-    />
-    <button
-        onclick="runCommand()"
-        style="
-            padding: 10px 20px;
-            background: var(--btn-bg);
-            color: var(--btn-text);
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-        "
-    >
-        Execute
-    </button>
+<div id="terminal-container" style="flex: 1; min-height: 0; background: #0c0c0c; border-radius: 4px; padding: 10px; border: 1px solid var(--border-color); overflow: hidden; margin-bottom: 20px;">
+    <div id="terminal" style="height: 100%; width: 100%;"></div>
 </div>
 
+<!-- Load Socket.IO Client -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
+<!-- Load Xterm.js -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
+<script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
+
 <script>
-    async function runCommand() {
-        const input = document.getElementById("cmd-input");
-        const cmd = input.value;
-        if (!cmd) return;
+    const socket = io();
 
-        const outputBox = document.getElementById("terminal-output");
-        outputBox.innerHTML += `<span>$ ${cmd}</span>\n`;
-        input.value = "";
+    // Initialize Terminal
+    const term = new Terminal({
+        cursorBlink: true,
+        theme: {
+            background: '#0c0c0c',
+            foreground: '#e0e0e0',
+            cursor: '#39ff14',
+            selection: '#555555',
+            black: '#000000',
+            red: '#cd3131',
+            green: '#0dbc79',
+            yellow: '#e5e510',
+            blue: '#2472c8',
+            magenta: '#bc3fbc',
+            cyan: '#11a8cd',
+            white: '#e5e5e5',
+            brightBlack: '#666666',
+            brightRed: '#f14c4c',
+            brightGreen: '#23d18b',
+            brightYellow: '#f5f543',
+            brightBlue: '#3b8eea',
+            brightMagenta: '#d670d6',
+            brightCyan: '#29b8db',
+            brightWhite: '#e5e5e5'
+        },
+        fontFamily: 'Courier New, Courier, monospace',
+        fontSize: 14
+    });
 
-        try {
-            const res = await fetch("/api/terminal", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ command: cmd }),
-            });
-            const data = await res.json();
-            if (data.output) {
-                outputBox.innerHTML += data.output;
-            } else if (data.error) {
-                outputBox.innerHTML += `<span style="color: red;">${data.error}</span>\n`;
+    const fitAddon = new FitAddon.FitAddon();
+    term.loadAddon(fitAddon);
+    term.open(document.getElementById('terminal'));
+    
+    // Socket listeners
+    socket.on('connect', () => {
+        socket.emit('terminal_connect');
+        sendSize();
+    });
+
+    socket.on('terminal_output', (data) => {
+        term.write(data.output);
+    });
+
+    // Terminal data -> Socket
+    term.onData((data) => {
+        socket.emit('terminal_input', { input: data });
+    });
+
+    // Resize handler
+    function sendSize() {
+        if (fitAddon) {
+            try {
+                fitAddon.fit();
+                socket.emit('terminal_resize', {
+                    rows: term.rows,
+                    cols: term.cols
+                });
+            } catch (e) {
+                console.error("Fit error", e);
             }
-        } catch (e) {
-            outputBox.innerHTML += `<span style="color: red;">Network Error: ${e}</span>\n`;
         }
-
-        outputBox.scrollTop = outputBox.scrollHeight;
     }
 
-    document
-        .getElementById("cmd-input")
-        .addEventListener("keypress", function (e) {
-            if (e.key === "Enter") runCommand();
-        });
+    // Wait a bit for CSS to render before fitting
+    setTimeout(sendSize, 100);
+
+    window.addEventListener('resize', () => {
+        sendSize();
+    });
 </script>
+<style>
+    /* Prevent vertical scroll bars on the parent xterm element */
+    .xterm {
+        padding: 5px;
+    }
+</style>
 {% endblock %}

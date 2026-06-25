@@ -17,8 +17,7 @@
     style="height: 20px; color: #74c221; margin-bottom: 5px; font-size: 0.9em"
 ></div>
 <div style="display: flex; gap: 10px">
-    <input
-        type="text"
+    <textarea
         id="prompt-input"
         style="
             flex: 1;
@@ -27,9 +26,15 @@
             border-radius: 4px;
             background: var(--input-bg);
             color: var(--input-text);
+            resize: none;
+            font-family: sans-serif;
+            box-sizing: border-box;
+            height: 40px;
+            max-height: 150px;
+            overflow-y: auto;
         "
         placeholder="Type a message..."
-    />
+    ></textarea>
     <button
         onclick="sendPrompt()"
         style="
@@ -224,6 +229,7 @@
         const text = input.value;
         if (!text) return;
         input.value = "";
+        input.style.height = "40px";
         document.getElementById("agent-status").innerHTML =
             '<span style="color: #74c221;">Agent is thinking...</span>';
         try {
@@ -239,11 +245,18 @@
         }
     }
 
-    document
-        .getElementById("prompt-input")
-        .addEventListener("keypress", function (e) {
-            if (e.key === "Enter") sendPrompt();
-        });
+    const tx = document.getElementById("prompt-input");
+    tx.addEventListener("input", function() {
+        this.style.height = "auto";
+        this.style.height = (this.scrollHeight) + "px";
+    });
+
+    tx.addEventListener("keydown", function (e) {
+        if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            sendPrompt();
+        }
+    });
 
     async function respondHitl(approved) {
         const reason = document.getElementById("hitl-reason").value;
