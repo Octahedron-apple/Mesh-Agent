@@ -18,7 +18,7 @@ RUN chown -R agent:agent /app
 
 USER agent
 
-RUN /app/main_venv/bin/pip install --no-cache-dir flask openai && \
+RUN /app/main_venv/bin/pip install --no-cache-dir flask openai flask-socketio && \
     /app/main_venv/bin/pip install -e /app/LineRun
 
 EXPOSE 5000

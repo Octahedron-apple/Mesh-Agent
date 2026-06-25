@@ -3,8 +3,10 @@ import os
 import shutil
 import subprocess
 import sys
+import threading
 
 from flask import Flask, jsonify, render_template, request, send_file
+from flask_socketio import SocketIO, emit
 
 sys.path.insert(0, "/app")
 
@@ -34,6 +36,11 @@ except ImportError:
 from agent import AI_Agent
 
 app = Flask(__name__)
+app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "mesh-agent-secret")
+
+# Use threading mode — safe with our existing background agent thread and
+# requires no extra dependencies (no eventlet/gevent needed).
+socketio = SocketIO(app, async_mode="threading", cors_allowed_origins="*")
 
 WORKSPACE_DIR = "/app/agent_workspace"
 AGENT_VENV = "/app/agent_venv"
@@ -45,22 +52,84 @@ os.makedirs(WORKSPACE_DIR, exist_ok=True)
 runner = Code_Runner(Path=WORKSPACE_DIR, Venv_Path=AGENT_VENV)
 agent = AI_Agent(Runner=runner)
 
+
+# ---------------------------------------------------------------------------
+# SocketIO helpers
+# ---------------------------------------------------------------------------
+
+def _build_status_payload():
+    return {
+        "running": agent.Running,
+        "thinking": agent.Is_Thinking,
+        "configured": bool(agent.Api_Key and agent.Model),
+        "pending_hitl": agent.Pending_Action is not None,
+    }
+
+
+def _build_messages_payload():
+    return {"messages": agent.Messages}
+
+
+def _build_hitl_payload():
+    if agent.Pending_Action is not None:
+        return {"pending": True, "action": agent.Pending_Action}
+    return {"pending": False}
+
+
+def _emit_state():
+    """Push all current state to every connected client.
+    Called from agent.On_State_Change (background thread) — use socketio.emit
+    which is thread-safe.
+    """
+    socketio.emit("status_update", _build_status_payload())
+    socketio.emit("messages_update", _build_messages_payload())
+    socketio.emit("hitl_pending", _build_hitl_payload())
+
+
+# Wire the agent callback so every state change triggers a push.
+agent.On_State_Change = _emit_state
+
+
+# ---------------------------------------------------------------------------
+# Start agent event loop in a background thread
+# ---------------------------------------------------------------------------
+
 import asyncio
 
-try:
-    loop = asyncio.get_running_loop()
+
+def start_agent_loop():
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
     agent.Start(loop)
-except RuntimeError:
-    import threading
+    loop.run_forever()
 
-    def start_agent_loop():
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        agent.Start(loop)
-        loop.run_forever()
 
-    threading.Thread(target=start_agent_loop, daemon=True).start()
+threading.Thread(target=start_agent_loop, daemon=True).start()
 
+
+# ---------------------------------------------------------------------------
+# SocketIO event handlers
+# ---------------------------------------------------------------------------
+
+@socketio.on("connect")
+def on_connect():
+    """Send full current state to a newly connected client immediately."""
+    emit("status_update", _build_status_payload())
+    emit("messages_update", _build_messages_payload())
+    emit("hitl_pending", _build_hitl_payload())
+
+
+@socketio.on("request_state")
+def on_request_state():
+    """Client can ask for a full state refresh at any time (e.g. on page focus)."""
+    emit("status_update", _build_status_payload())
+    emit("messages_update", _build_messages_payload())
+    emit("hitl_pending", _build_hitl_payload())
+
+
+# ---------------------------------------------------------------------------
+# Theme helpers
+# ---------------------------------------------------------------------------
 
 def get_theme():
     try:
@@ -74,6 +143,10 @@ def get_theme():
 def inject_theme():
     return dict(dark_mode=get_theme())
 
+
+# ---------------------------------------------------------------------------
+# Page routes
+# ---------------------------------------------------------------------------
 
 @app.route("/api/theme", methods=["POST"])
 def update_theme():
@@ -106,6 +179,10 @@ def workspace_page():
     return render_template("workspace.html")
 
 
+# ---------------------------------------------------------------------------
+# REST API routes (preserved — also serve as HTTP fallbacks)
+# ---------------------------------------------------------------------------
+
 @app.route("/api/config", methods=["GET", "POST"])
 def config():
     if request.method == "GET":
@@ -130,13 +207,15 @@ def prompt():
     text = data.get("text")
     if text:
         agent.Add_User_Message(text)
+        # Notify immediately so the user message appears before the agent responds.
+        _emit_state()
         return jsonify({"status": "ok"})
     return jsonify({"error": "No text"}), 400
 
 
 @app.route("/api/messages", methods=["GET"])
 def messages():
-    return jsonify({"messages": agent.Messages})
+    return jsonify(_build_messages_payload())
 
 
 @app.route("/api/terminal", methods=["POST"])
@@ -169,14 +248,7 @@ def install():
 
 @app.route("/api/status", methods=["GET"])
 def agent_status():
-    return jsonify(
-        {
-            "running": agent.Running,
-            "thinking": agent.Is_Thinking,
-            "configured": bool(agent.Api_Key and agent.Model),
-            "pending_hitl": agent.Pending_Action is not None,
-        }
-    )
+    return jsonify(_build_status_payload())
 
 
 @app.route("/api/state", methods=["GET"])
@@ -232,6 +304,7 @@ def download_workspace():
         zip_path + ".zip", as_attachment=True, download_name="workspace.zip"
     )
 
+
 @app.route("/api/download/<path:filename>", methods=["GET"])
 def download_file(filename):
     from flask import send_from_directory
@@ -243,9 +316,7 @@ def download_file(filename):
 
 @app.route("/api/hitl/pending", methods=["GET"])
 def hitl_pending():
-    if agent.Pending_Action is not None:
-        return jsonify({"pending": True, "action": agent.Pending_Action})
-    return jsonify({"pending": False})
+    return jsonify(_build_hitl_payload())
 
 
 @app.route("/api/hitl/respond", methods=["POST"])
@@ -264,4 +335,4 @@ def hitl_respond():
 
 if __name__ == "__main__":
     os.makedirs(WORKSPACE_DIR, exist_ok=True)
-    app.run(host="0.0.0.0", port=5000, debug=False)
+    socketio.run(app, host="0.0.0.0", port=5000, debug=False, allow_unsafe_werkzeug=True)

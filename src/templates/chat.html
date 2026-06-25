@@ -126,68 +126,98 @@
     </div>
 </div>
 
+<!-- Socket.IO Client -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
 <script>
-    async function loadMessages() {
-        try {
-            const res = await fetch("/api/messages");
-            const data = await res.json();
-            const chatBox = document.getElementById("chat-box");
-            chatBox.innerHTML = "";
-            if (data.messages) {
-                data.messages.forEach((msg) => {
-                    if (msg.role === 'system') return;
-                    
-                    const div = document.createElement("div");
-                    div.style.marginBottom = "15px";
+    const socket = io();
 
-                    let contentHTML = "";
-                    if (msg.content) {
-                        if (typeof msg.content === "string") {
-                            contentHTML = msg.content.replace(/\n/g, "<br/>");
-                        } else {
-                            contentHTML = JSON.stringify(msg.content, null, 2);
-                        }
+    socket.on("connect", () => {
+        socket.emit("request_state");
+    });
+
+    socket.on("messages_update", (data) => {
+        const chatBox = document.getElementById("chat-box");
+        chatBox.innerHTML = "";
+        if (data.messages) {
+            data.messages.forEach((msg) => {
+                if (msg.role === 'system') return;
+                
+                const div = document.createElement("div");
+                div.style.marginBottom = "15px";
+
+                let contentHTML = "";
+                if (msg.content) {
+                    if (typeof msg.content === "string") {
+                        contentHTML = msg.content.replace(/\n/g, "<br/>");
+                    } else {
+                        contentHTML = JSON.stringify(msg.content, null, 2);
                     }
+                }
 
-                    if (msg.tool_calls && msg.tool_calls.length > 0) {
-                        let toolsHTML = msg.tool_calls
-                            .map((tc) => {
-                                let args = tc.function.arguments;
-                                try {
-                                    args = JSON.stringify(
-                                        JSON.parse(args),
-                                        null,
-                                        2,
-                                    );
-                                } catch (e) {}
-                                return `<div style="margin-top: 10px; padding: 10px; background: var(--tool-bg); border-left: 4px solid #007bff; border-radius: 4px;">
-                            <strong>Tool Call:</strong> <code>${tc.function.name}</code>
-                            <pre style="margin-top: 5px; margin-bottom: 0; font-size: 0.9em; white-space: pre-wrap; color: var(--text-color);">${args}</pre>
-                        </div>`;
-                            })
-                            .join("");
-                        contentHTML += toolsHTML;
-                    }
+                if (msg.tool_calls && msg.tool_calls.length > 0) {
+                    let toolsHTML = msg.tool_calls
+                        .map((tc) => {
+                            let args = tc.function.arguments;
+                            try {
+                                args = JSON.stringify(
+                                    JSON.parse(args),
+                                    null,
+                                    2,
+                                );
+                            } catch (e) {}
+                            return `<div style="margin-top: 10px; padding: 10px; background: var(--tool-bg); border-left: 4px solid #007bff; border-radius: 4px;">
+                        <strong>Tool Call:</strong> <code>${tc.function.name}</code>
+                        <pre style="margin-top: 5px; margin-bottom: 0; font-size: 0.9em; white-space: pre-wrap; color: var(--text-color);">${args}</pre>
+                    </div>`;
+                        })
+                        .join("");
+                    contentHTML += toolsHTML;
+                }
 
-                    let headerText = msg.role;
-                    if (msg.role === "tool" && msg.name) {
-                        headerText = `Tool Result (${msg.name})`;
-                    }
+                let headerText = msg.role;
+                if (msg.role === "tool" && msg.name) {
+                    headerText = `Tool Result (${msg.name})`;
+                }
 
-                    if (!contentHTML && msg.role === "assistant") {
-                        contentHTML =
-                            '<em style="color: #999;">Using tools...</em>';
-                    }
+                if (!contentHTML && msg.role === "assistant") {
+                    contentHTML =
+                        '<em style="color: #999;">Using tools...</em>';
+                }
 
-                    div.innerHTML = `<strong style="text-transform: capitalize; color: var(--msg-text);">${headerText}:</strong> <div style="margin-top: 5px; background: var(--msg-bg); padding: 10px; border-radius: 4px;">${contentHTML}</div>`;
-                    chatBox.appendChild(div);
-                });
-                chatBox.scrollTop = chatBox.scrollHeight;
-            }
-        } catch (e) {
-            console.error("Error loading messages", e);
+                div.innerHTML = `<strong style="text-transform: capitalize; color: var(--msg-text);">${headerText}:</strong> <div style="margin-top: 5px; background: var(--msg-bg); padding: 10px; border-radius: 4px;">${contentHTML}</div>`;
+                chatBox.appendChild(div);
+            });
+            chatBox.scrollTop = chatBox.scrollHeight;
         }
-    }
+    });
+
+    socket.on("status_update", (data) => {
+        const statusDiv = document.getElementById("agent-status");
+        if (!data.configured) {
+            statusDiv.innerHTML =
+                '<span style="color: #aaa;">Not configured — go to <a href="/config">Config</a></span>';
+        } else if (data.pending_hitl) {
+            statusDiv.innerHTML =
+                '<span style="color: #e67e22;">Waiting for your approval...</span>';
+        } else if (data.thinking) {
+            statusDiv.innerHTML =
+                '<span style="color: #74c221;">Agent is thinking...</span>';
+        } else {
+            statusDiv.innerHTML =
+                '<span style="color: #aaa;">Agent idle</span>';
+        }
+    });
+
+    socket.on("hitl_pending", (data) => {
+        const modal = document.getElementById("hitl-modal");
+        if (data.pending) {
+            document.getElementById("hitl-action").textContent =
+                JSON.stringify(data.action, null, 2);
+            modal.style.display = "flex";
+        } else {
+            modal.style.display = "none";
+        }
+    });
 
     async function sendPrompt() {
         const input = document.getElementById("prompt-input");
@@ -195,14 +225,14 @@
         if (!text) return;
         input.value = "";
         document.getElementById("agent-status").innerHTML =
-            "Agent is thinking...";
+            '<span style="color: #74c221;">Agent is thinking...</span>';
         try {
             await fetch("/api/prompt", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ text }),
             });
-            loadMessages();
+            // The server will push a messages_update via Socket.IO
         } catch (e) {
             document.getElementById("agent-status").innerHTML =
                 `<span style="color: red;">Error: ${e.message || e}</span>`;
@@ -215,23 +245,6 @@
             if (e.key === "Enter") sendPrompt();
         });
 
-    async function checkHitl() {
-        try {
-            const res = await fetch("/api/hitl/pending");
-            const data = await res.json();
-            const modal = document.getElementById("hitl-modal");
-            if (data.pending) {
-                document.getElementById("hitl-action").textContent =
-                    JSON.stringify(data.action, null, 2);
-                modal.style.display = "flex";
-            } else {
-                modal.style.display = "none";
-            }
-        } catch (e) {
-            console.error("Error checking HITL", e);
-        }
-    }
-
     async function respondHitl(approved) {
         const reason = document.getElementById("hitl-reason").value;
         await fetch("/api/hitl/respond", {
@@ -239,37 +252,9 @@
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ approved, reason }),
         });
+        // modal hidden immediately here, but the server will also push a hitl_pending false update
         document.getElementById("hitl-modal").style.display = "none";
         document.getElementById("hitl-reason").value = "";
     }
-
-    async function updateStatus() {
-        try {
-            const res = await fetch("/api/status");
-            const data = await res.json();
-            const statusDiv = document.getElementById("agent-status");
-            if (!data.configured) {
-                statusDiv.innerHTML =
-                    '<span style="color: #aaa;">Not configured — go to <a href="/config">Config</a></span>';
-            } else if (data.pending_hitl) {
-                statusDiv.innerHTML =
-                    '<span style="color: #e67e22;">Waiting for your approval...</span>';
-            } else if (data.thinking) {
-                statusDiv.innerHTML =
-                    '<span style="color: #74c221;">Agent is thinking...</span>';
-            } else {
-                statusDiv.innerHTML =
-                    '<span style="color: #aaa;">Agent idle</span>';
-            }
-        } catch (e) {
-            console.error("Error checking status", e);
-        }
-    }
-
-    setInterval(loadMessages, 3000);
-    setInterval(checkHitl, 2000);
-    setInterval(updateStatus, 1000);
-    loadMessages();
-    updateStatus();
 </script>
 {% endblock %}

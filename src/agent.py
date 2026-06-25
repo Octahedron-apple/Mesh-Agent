@@ -33,10 +33,12 @@ class AI_Agent:
         self.Client = AsyncOpenAI(
             base_url="https://openrouter.ai/api/v1", api_key=self.Api_Key
         )
+        self._Notify()
 
     def Add_User_Message(self, text):
         """ """
         self.Messages.append({"role": "user", "content": text})
+        self._Notify()
 
     def Start(self, loop):
         """Must be called from within a running event loop or passed the loop explicitly."""
@@ -58,6 +60,7 @@ class AI_Agent:
 
     async def _Request_Hitl(self, Tool_Name, Kwargs):
         self.Pending_Action = {"tool": Tool_Name, "args": Kwargs}
+        self._Notify()
 
         self.Hitl_Event.clear()
         await self.Hitl_Event.wait()
@@ -65,6 +68,7 @@ class AI_Agent:
         Response = self.Hitl_Response
         self.Pending_Action = None
         self.Hitl_Response = None
+        self._Notify()
         return Response
 
     def _Execute_Tool(self, Tool_Name, **Kwargs):
@@ -194,6 +198,14 @@ class AI_Agent:
             },
         ]
 
+    def _Notify(self):
+        """Fire the On_State_Change callback if one is registered."""
+        if callable(self.On_State_Change):
+            try:
+                self.On_State_Change()
+            except Exception as e:
+                print(f"[Agent] Error in On_State_Change callback: {e}")
+
     async def _Execution_Loop(self):
         self.Hitl_Event = asyncio.Event() 
         while self.Running:
@@ -217,6 +229,7 @@ class AI_Agent:
 
             try:
                 self.Is_Thinking = True
+                self._Notify()
                 Response = await self.Client.chat.completions.create(
                     model=self.Model,
                     messages=self.Messages,
@@ -224,6 +237,7 @@ class AI_Agent:
                     temperature=0.2,
                 )
                 self.Is_Thinking = False
+                self._Notify()
 
                 Message = Response.choices[0].message
 
@@ -231,6 +245,7 @@ class AI_Agent:
                 if "content" not in Msg_Dict:
                     Msg_Dict["content"] = ""
                 self.Messages.append(Msg_Dict)
+                self._Notify()
 
                 if Message.tool_calls:
                     for Tool_Call in Message.tool_calls:
@@ -254,6 +269,7 @@ class AI_Agent:
                                     "content": Result,
                                 }
                             )
+                            self._Notify()
                         else:
                             Reason = (
                                 Hitl_Res.get("reason", "Rejected by user")
@@ -268,8 +284,10 @@ class AI_Agent:
                                     "content": f"Action rejected by user. Reason: {Reason}",
                                 }
                             )
+                            self._Notify()
 
             except Exception as e:
                 self.Is_Thinking = False
+                self._Notify()
                 print(f"[Agent] Loop Error: {e}")
                 await asyncio.sleep(5)
