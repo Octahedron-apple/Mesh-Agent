@@ -1,0 +1,234 @@
+{% extends "index.html" %} {% block content %}
+<div style="display: flex; height: calc(100vh - 80px); gap: 15px; margin-top: 10px;">
+    
+    <div style="width: 250px; background: var(--msg-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 15px; display: flex; flex-direction: column; box-sizing: border-box;">
+        <h3 style="margin-top: 0; margin-bottom: 10px;">Workspace Files</h3>
+        
+        <div style="display: flex; gap: 5px; margin-bottom: 15px;">
+            <input type="text" id="new-file-name" placeholder="new_file.py" style="flex: 1; padding: 6px; border: 1px solid var(--input-border); border-radius: 4px; background: var(--input-bg); color: var(--input-text); font-size: 0.9em;" />
+            <button onclick="createNewFile()" style="padding: 6px 12px; background: #74c221; border: none; border-radius: 4px; color: white; cursor: pointer; font-weight: bold; font-size: 0.9em;">+</button>
+        </div>
+
+        <div style="flex: 1; overflow-y: auto;">
+            <ul id="editor-file-list" style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 5px;">
+                <li style="color: var(--msg-text); font-style: italic;">Loading...</li>
+            </ul>
+        </div>
+    </div>
+
+    
+    <div style="flex: 1; display: flex; flex-direction: column; background: var(--msg-bg); border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; box-sizing: border-box;">
+        <div style="padding: 10px 15px; background: var(--chat-bg); border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
+            <span id="current-filename" style="font-weight: bold; font-family: monospace; color: var(--msg-text);">No file open</span>
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <span id="save-status" style="font-size: 0.9em; color: #888;"></span>
+                <button id="save-btn" onclick="saveCurrentFile()" disabled style="padding: 6px 15px; background: #74c221; border: none; border-radius: 4px; color: white; cursor: pointer; font-weight: bold; opacity: 0.5;">Save</button>
+            </div>
+        </div>
+        <div id="editor-container" style="flex: 1; width: 100%;"></div>
+    </div>
+</div>
+
+
+<script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
+<script>
+    let currentFile = null;
+    let editorInstance = null;
+
+    require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs' } });
+    require(['vs/editor/editor.main'], function () {
+        const isDark = document.body.classList.contains("dark");
+        editorInstance = monaco.editor.create(document.getElementById('editor-container'), {
+            value: '# Select a file from the sidebar to start editing\n',
+            language: 'python',
+            theme: isDark ? 'vs-dark' : 'vs',
+            automaticLayout: true,
+            fontSize: 14,
+            minimap: { enabled: false }
+        });
+        
+        editorInstance.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, function() {
+            saveCurrentFile();
+        });
+        
+        window.editor = editorInstance;
+        loadFileList();
+    });
+
+    const themeObserver = new MutationObserver(() => {
+        const isDark = document.body.classList.contains("dark");
+        if (editorInstance) {
+            monaco.editor.setTheme(isDark ? 'vs-dark' : 'vs');
+        }
+    });
+    themeObserver.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+
+    async function loadFileList() {
+        try {
+            const res = await fetch("/api/files");
+            const data = await res.json();
+            const list = document.getElementById("editor-file-list");
+            list.innerHTML = "";
+
+            if (data.files && data.files.length > 0) {
+                data.files.forEach((file) => {
+                    const li = document.createElement("li");
+                    li.style.padding = "8px 10px";
+                    li.style.borderRadius = "4px";
+                    li.style.cursor = "pointer";
+                    li.style.display = "flex";
+                    li.style.justifyContent = "space-between";
+                    li.style.alignItems = "center";
+                    li.style.transition = "background 0.2s";
+                    
+                    if (currentFile === file) {
+                        li.style.background = "#74c221";
+                        li.style.color = "white";
+                    } else {
+                        li.style.background = "var(--chat-bg)";
+                        li.style.color = "var(--text-color)";
+                    }
+
+                    const label = document.createElement("span");
+                    label.textContent = "📄 " + file;
+                    label.style.flex = "1";
+                    label.onclick = () => openFile(file);
+
+                    const deleteBtn = document.createElement("span");
+                    deleteBtn.innerHTML = "🗑️";
+                    deleteBtn.style.marginLeft = "10px";
+                    deleteBtn.style.opacity = "0.7";
+                    deleteBtn.style.cursor = "pointer";
+                    deleteBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        deleteFile(file);
+                    };
+
+                    li.appendChild(label);
+                    li.appendChild(deleteBtn);
+                    list.appendChild(li);
+                });
+            } else {
+                list.innerHTML = '<li style="color: var(--msg-text); font-style: italic;">No files in workspace.</li>';
+            }
+        } catch (e) {
+            console.error("Error loading files", e);
+        }
+    }
+
+    async function openFile(filename) {
+        try {
+            const res = await fetch(`/api/editor/read?filename=${encodeURIComponent(filename)}`);
+            const data = await res.json();
+            if (data.error) {
+                alert(data.error);
+                return;
+            }
+
+            currentFile = filename;
+            
+            let lang = 'plaintext';
+            if (filename.endsWith('.py')) lang = 'python';
+            else if (filename.endsWith('.js')) lang = 'javascript';
+            else if (filename.endsWith('.html')) lang = 'html';
+            else if (filename.endsWith('.css')) lang = 'css';
+            else if (filename.endsWith('.json')) lang = 'json';
+            else if (filename.endsWith('.md')) lang = 'markdown';
+            else if (filename.endsWith('.sh')) lang = 'shell';
+
+            const model = monaco.editor.createModel(data.content, lang);
+            editorInstance.setModel(model);
+
+            document.getElementById("current-filename").textContent = filename;
+            const saveBtn = document.getElementById("save-btn");
+            saveBtn.disabled = false;
+            saveBtn.style.opacity = "1";
+            document.getElementById("save-status").textContent = "";
+
+            loadFileList();
+        } catch (e) {
+            alert("Error reading file: " + e);
+        }
+    }
+
+    async function saveCurrentFile() {
+        if (!currentFile || !editorInstance) return;
+        const content = editorInstance.getValue();
+        const saveStatus = document.getElementById("save-status");
+        saveStatus.textContent = "Saving...";
+
+        try {
+            const res = await fetch("/api/editor/write", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ filename: currentFile, content })
+            });
+            const data = await res.json();
+            if (data.status === "ok") {
+                saveStatus.textContent = "Saved successfully!";
+                setTimeout(() => {
+                    if (saveStatus.textContent === "Saved successfully!") {
+                        saveStatus.textContent = "";
+                    }
+                }, 2000);
+            } else {
+                saveStatus.textContent = "Error: " + data.error;
+            }
+        } catch (e) {
+            saveStatus.textContent = "Network Error: " + e;
+        }
+    }
+
+    async function createNewFile() {
+        const input = document.getElementById("new-file-name");
+        let filename = input.value.trim();
+        if (!filename) return;
+
+        try {
+            const res = await fetch("/api/editor/write", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ filename, content: "" })
+            });
+            const data = await res.json();
+            if (data.status === "ok") {
+                input.value = "";
+                await loadFileList();
+                await openFile(filename);
+            } else {
+                alert("Error: " + data.error);
+            }
+        } catch (e) {
+            alert("Network Error: " + e);
+        }
+    }
+
+    async function deleteFile(filename) {
+        if (!confirm(`Are you sure you want to delete ${filename}?`)) return;
+        
+        try {
+            const res = await fetch("/api/editor/delete", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ filename })
+            });
+            const data = await res.json();
+            if (data.status === "ok") {
+                if (currentFile === filename) {
+                    currentFile = null;
+                    editorInstance.setValue("# Select a file from the sidebar to start editing\n");
+                    document.getElementById("current-filename").textContent = "No file open";
+                    const saveBtn = document.getElementById("save-btn");
+                    saveBtn.disabled = true;
+                    saveBtn.style.opacity = "0.5";
+                }
+                loadFileList();
+            } else {
+                alert("Error deleting file: " + data.error);
+            }
+        } catch (e) {
+            alert("Network Error: " + e);
+        }
+    }
+</script>
+{% endblock %}

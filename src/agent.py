@@ -5,7 +5,6 @@ from openai import AsyncOpenAI
 
 
 class AI_Agent:
-    """ """
 
     def __init__(self, Runner) -> None:
         self.Runner = Runner
@@ -23,7 +22,6 @@ class AI_Agent:
         self.Client = None
 
     def Set_Config(self, Api_key, Model, System_Prompt=None):
-        """ """
         self.Api_Key = Api_key
         self.Model = Model
         if System_Prompt:
@@ -36,12 +34,10 @@ class AI_Agent:
         self._Notify()
 
     def Add_User_Message(self, text):
-        """ """
         self.Messages.append({"role": "user", "content": text})
         self._Notify()
 
     def Start(self, loop):
-        """Must be called from within a running event loop or passed the loop explicitly."""
         if not self.Running:
             self.Running = True
             self.Loop = loop
@@ -199,7 +195,6 @@ class AI_Agent:
         ]
 
     def _Notify(self):
-        """Fire the On_State_Change callback if one is registered."""
         if callable(self.On_State_Change):
             try:
                 self.On_State_Change()

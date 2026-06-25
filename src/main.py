@@ -44,8 +44,6 @@ from agent import AI_Agent
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "mesh-agent-secret")
 
-# Use threading mode — safe with our existing background agent thread and
-# requires no extra dependencies (no eventlet/gevent needed).
 socketio = SocketIO(app, async_mode="threading", cors_allowed_origins="*")
 
 WORKSPACE_DIR = "/app/agent_workspace"
@@ -58,9 +56,6 @@ os.makedirs(WORKSPACE_DIR, exist_ok=True)
 runner = Code_Runner(Path=WORKSPACE_DIR, Venv_Path=AGENT_VENV)
 agent = AI_Agent(Runner=runner)
 
-# ---------------------------------------------------------------------------
-# PTY Terminal manager
-# ---------------------------------------------------------------------------
 terminal_fd = None
 terminal_child = None
 
@@ -91,7 +86,6 @@ def start_persistent_terminal():
     os.close(slave_fd)
     terminal_fd = master_fd
     
-    # Default window size
     try:
         set_pty_size(terminal_fd, 24, 80)
     except Exception:
@@ -127,9 +121,6 @@ def read_terminal_output():
 start_persistent_terminal()
 
 
-# ---------------------------------------------------------------------------
-# SocketIO helpers
-# ---------------------------------------------------------------------------
 
 def _build_status_payload():
     return {
@@ -151,22 +142,14 @@ def _build_hitl_payload():
 
 
 def _emit_state():
-    """Push all current state to every connected client.
-    Called from agent.On_State_Change (background thread) — use socketio.emit
-    which is thread-safe.
-    """
     socketio.emit("status_update", _build_status_payload())
     socketio.emit("messages_update", _build_messages_payload())
     socketio.emit("hitl_pending", _build_hitl_payload())
 
 
-# Wire the agent callback so every state change triggers a push.
 agent.On_State_Change = _emit_state
 
 
-# ---------------------------------------------------------------------------
-# Start agent event loop in a background thread
-# ---------------------------------------------------------------------------
 
 import asyncio
 
@@ -181,13 +164,9 @@ def start_agent_loop():
 threading.Thread(target=start_agent_loop, daemon=True).start()
 
 
-# ---------------------------------------------------------------------------
-# SocketIO event handlers
-# ---------------------------------------------------------------------------
 
 @socketio.on("connect")
 def on_connect():
-    """Send full current state to a newly connected client immediately."""
     emit("status_update", _build_status_payload())
     emit("messages_update", _build_messages_payload())
     emit("hitl_pending", _build_hitl_payload())
@@ -195,7 +174,6 @@ def on_connect():
 
 @socketio.on("request_state")
 def on_request_state():
-    """Client can ask for a full state refresh at any time (e.g. on page focus)."""
     emit("status_update", _build_status_payload())
     emit("messages_update", _build_messages_payload())
     emit("hitl_pending", _build_hitl_payload())
@@ -217,7 +195,6 @@ def on_terminal_connect():
     global terminal_fd
     if terminal_fd is not None:
         try:
-            # Send Ctrl-L to clear and redraw prompt
             os.write(terminal_fd, b"\x0c")
         except Exception:
             pass
@@ -235,9 +212,6 @@ def on_terminal_resize(data):
             print(f"[Terminal] Resize error: {e}")
 
 
-# ---------------------------------------------------------------------------
-# Theme helpers
-# ---------------------------------------------------------------------------
 
 def get_theme():
     try:
@@ -252,9 +226,6 @@ def inject_theme():
     return dict(dark_mode=get_theme())
 
 
-# ---------------------------------------------------------------------------
-# Page routes
-# ---------------------------------------------------------------------------
 
 @app.route("/api/theme", methods=["POST"])
 def update_theme():
@@ -287,9 +258,68 @@ def workspace_page():
     return render_template("workspace.html")
 
 
-# ---------------------------------------------------------------------------
-# REST API routes (preserved — also serve as HTTP fallbacks)
-# ---------------------------------------------------------------------------
+@app.route("/editor")
+def editor_page():
+    return render_template("editor.html")
+
+
+
+@app.route("/api/editor/read", methods=["GET"])
+def editor_read():
+    filename = request.args.get("filename")
+    if not filename:
+        return jsonify({"error": "No filename provided"}), 400
+    if ".." in filename or filename.startswith("/"):
+        return jsonify({"error": "Invalid filename"}), 400
+    filepath = os.path.join(WORKSPACE_DIR, filename)
+    if not os.path.exists(filepath):
+        return jsonify({"error": "File not found"}), 404
+    try:
+        with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
+            content = f.read()
+        return jsonify({"content": content})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/editor/write", methods=["POST"])
+def editor_write():
+    data = request.json
+    filename = data.get("filename")
+    content = data.get("content", "")
+    if not filename:
+        return jsonify({"error": "No filename provided"}), 400
+    if ".." in filename or filename.startswith("/"):
+        return jsonify({"error": "Invalid filename"}), 400
+    filepath = os.path.join(WORKSPACE_DIR, filename)
+    try:
+        with open(filepath, "w", encoding="utf-8") as f:
+            f.write(content)
+        return jsonify({"status": "ok"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/editor/delete", methods=["POST"])
+def editor_delete():
+    data = request.json
+    filename = data.get("filename")
+    if not filename:
+        return jsonify({"error": "No filename provided"}), 400
+    if ".." in filename or filename.startswith("/"):
+        return jsonify({"error": "Invalid filename"}), 400
+    filepath = os.path.join(WORKSPACE_DIR, filename)
+    if not os.path.exists(filepath):
+        return jsonify({"error": "File not found"}), 404
+    try:
+        if os.path.isdir(filepath):
+            shutil.rmtree(filepath)
+        else:
+            os.remove(filepath)
+        return jsonify({"status": "ok"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 
 @app.route("/api/config", methods=["GET", "POST"])
 def config():
@@ -315,7 +345,6 @@ def prompt():
     text = data.get("text")
     if text:
         agent.Add_User_Message(text)
-        # Notify immediately so the user message appears before the agent responds.
         _emit_state()
         return jsonify({"status": "ok"})
     return jsonify({"error": "No text"}), 400

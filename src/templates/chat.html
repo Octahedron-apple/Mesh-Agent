@@ -50,7 +50,7 @@
     </button>
 </div>
 
-<!-- Human in the loop modal overlay -->
+
 <div
     id="hitl-modal"
     style="
@@ -131,7 +131,7 @@
     </div>
 </div>
 
-<!-- Socket.IO Client -->
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
 <script>
     const socket = io();
@@ -238,7 +238,6 @@
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ text }),
             });
-            // The server will push a messages_update via Socket.IO
         } catch (e) {
             document.getElementById("agent-status").innerHTML =
                 `<span style="color: red;">Error: ${e.message || e}</span>`;
@@ -265,7 +264,6 @@
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ approved, reason }),
         });
-        // modal hidden immediately here, but the server will also push a hitl_pending false update
         document.getElementById("hitl-modal").style.display = "none";
         document.getElementById("hitl-reason").value = "";
     }
